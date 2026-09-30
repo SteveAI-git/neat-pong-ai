@@ -131,3 +131,44 @@ def opponent_ai_move(paddle, ball, accuracy=0.65, deadzone=12):
     elif diff < -deadzone:
         paddle.move(up=True)
     # else: within the deadzone, stay put (imperfect tracking).
+
+
+def decide_ai_direction(output_value, last_direction, threshold=0.1, hysteresis=0.15):
+    """
+    Turn a NEAT network's single raw output into an "up" / "down" / "hold"
+    decision, using hysteresis (a Schmitt-trigger-style dead band) instead
+    of a single fixed threshold.
+
+    Why this matters: a plain "output > 0.1 -> up, output < -0.1 -> down"
+    rule makes the paddle vibrate rapidly whenever the network's output
+    hovers near zero, since tiny noise flips the decision every frame.
+    Hysteresis fixes this by requiring a LARGER swing to reverse an
+    already-committed direction than to start moving in the first place —
+    the same trick used in thermostats and physical switches to stop
+    chattering. The result is visibly smoother, more deliberate paddle
+    motion, independent of how well-trained the genome is.
+
+    This function is shared by main.py (training) and replay.py so a
+    genome behaves identically in both — the fitness it earned while
+    training only means something if it's controlled the same way later.
+    """
+    if last_direction == "up":
+        if output_value < -hysteresis:
+            return "down"
+        elif output_value > -threshold:
+            return "up"
+        return "hold"
+
+    if last_direction == "down":
+        if output_value > hysteresis:
+            return "up"
+        elif output_value < threshold:
+            return "down"
+        return "hold"
+
+    # Currently idle: use the plain (narrower) threshold to start moving.
+    if output_value > threshold:
+        return "up"
+    elif output_value < -threshold:
+        return "down"
+    return "hold"
